@@ -87,6 +87,12 @@ jobs:
           make -j2 fastbuild
         env:
           EIAPI_TOKEN: ${{ secrets.EIAPI_TOKEN }}
+      - name: Prepare dist for GitHub Pages
+        run: |
+          cd $GITHUB_WORKSPACE/wasmegg/dist
+          # GHP doesn't support Netlify _redirects; copy _home to root
+          cp -r _home/* .
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       - name: Rewrite paths for GitHub Pages (/egg/ prefix)
         run: |
           cd $GITHUB_WORKSPACE/wasmegg/dist
