@@ -87,6 +87,20 @@ jobs:
           make -j2 fastbuild
         env:
           EIAPI_TOKEN: ${{ secrets.EIAPI_TOKEN }}
+      - name: Rewrite paths for GitHub Pages (/egg/ prefix)
+        run: |
+          cd $GITHUB_WORKSPACE/wasmegg/dist
+          # Build sed args dynamically from the app directories in dist/
+          SED_ARGS=""
+          for dir in */; do
+            name="${dir%/}"
+            SED_ARGS="$SED_ARGS -e s|\"/${name}/|\"/egg/${name}/|g"
+          done
+          find . -type f \( -name '*.html' -o -name '*.js' \) -exec sed -i $SED_ARGS {} +
+          # Also rewrite home page root links (href="/")
+          find . -type f -name '*.html' -exec sed -i 's|href="/"|href="/egg/"|g' {} +
+          find . -type f -name '*.js' -exec sed -i 's|href:"/"|href:"/egg/"|g' {} +
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
