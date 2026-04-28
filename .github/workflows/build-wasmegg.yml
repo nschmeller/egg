@@ -24,6 +24,12 @@ on:
   # Regenerate every day to incorporate updated mission outcome data.
   # Cron moved to cloudflare worker for more reliable timing
   # - cron: '30 4 * * *'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   # No TS type checking for faster deployment.
   wasmegg-fastbuild:
@@ -81,32 +87,23 @@ jobs:
           make -j2 fastbuild
         env:
           EIAPI_TOKEN: ${{ secrets.EIAPI_TOKEN }}
-      - name: Install netlify cli
-        run: |
-          echo $GITHUB_WORKSPACE/pnpm-global >> $GITHUB_PATH
-          pnpm add --global netlify-cli
-        if: github.event_name != 'pull_request'
-      - name: Deploy
-        run: |
-          netlify deploy --prod -d $GITHUB_WORKSPACE/wasmegg/dist
-        env:
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_WASMEGG_SITE_ID }}
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: wasmegg/dist
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-      - name: Deploy to branch-specific URL
-        run: |
-          netlify deploy --alias "${GITHUB_REF##*/}" -d $GITHUB_WORKSPACE/wasmegg/dist
-        env:
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_WASMEGG_SITE_ID }}
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        if: github.ref != 'refs/heads/main' && github.event_name != 'pull_request'
-      - name: Deploy to commit-specific URL
-        run: |
-          netlify deploy --alias "$GITHUB_SHA" -d $GITHUB_WORKSPACE/wasmegg/dist
-        env:
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_WASMEGG_SITE_ID }}
-          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-        if: github.event_name != 'pull_request'
+
+  deploy-ghpages:
+    needs: wasmegg-fastbuild
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
 
   # With TS type checking.
   wasmegg-fullbuild:
