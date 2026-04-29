@@ -40,6 +40,14 @@
   >
     <artifacting-progress-report :player-id="playerId" :inventory="inventory" :backup="backup" />
   </collapsible-section>
+
+  <collapsible-section
+    section-title="Sensor target history"
+    :visible="isVisibleSection('mission-charts')"
+    @toggle="toggleSectionVisibility('mission-charts')"
+  >
+    <chart-variant-stream :artifacts-d-b="artifactsDB" />
+  </collapsible-section>
 </template>
 
 <script lang="ts">
@@ -57,6 +65,7 @@ import MissionStatisticsReport from '@/components/MissionStatisticsReport.vue';
 import LaunchLog from '@/components/LaunchLog.vue';
 import ArtifactLoadoutsReport from '@/components/ArtifactLoadoutsReport.vue';
 import ArtifactingProgressReport from '@/components/ArtifactingProgressReport.vue';
+import ChartVariantStream from '@/components/ChartVariantStream.vue';
 
 export default defineComponent({
   components: {
@@ -67,6 +76,7 @@ export default defineComponent({
     LaunchLog,
     ArtifactLoadoutsReport,
     ArtifactingProgressReport,
+    ChartVariantStream,
   },
   props: {
     playerId: {
