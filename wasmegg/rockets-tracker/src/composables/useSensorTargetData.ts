@@ -10,9 +10,6 @@ dayjs.extend(isoWeek);
 import Name = ei.ArtifactSpec.Name;
 import Type = ei.ArtifactSpec.Type;
 
-// 10000 is the game's sentinel for "no sensor target selected"
-const UNTARGETED = 10000;
-
 // --- Artifact metadata ---
 
 // Colors sampled from T4 artifact icons
@@ -256,7 +253,7 @@ export function useSensorTargetData(
     const totals = new Map<Name, number>();
     for (const mission of missions.value) {
       const id = mission.missionInfo.targetArtifact;
-      if (id == null || id === Name.UNKNOWN || id === UNTARGETED) continue;
+      if (id == null || id === Name.UNKNOWN || Number(id) === 10000) continue;
       totals.set(id, (totals.get(id) || 0) + (mission.capacity ?? 0));
       if (!mission.launchTime) continue;
       const dayKey = mission.launchTime.format('YYYY-MM-DD');
