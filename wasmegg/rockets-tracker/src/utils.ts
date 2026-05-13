@@ -67,6 +67,11 @@ export function artifactRarityBgClass(afxRarity: ei.ArtifactSpec.Rarity): string
   }
 }
 
+export function formatSlots(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return Math.round(value).toString();
+}
+
 export function formatLaunchPoints(x: number): string {
   if (x.toFixed(1).endsWith('.0')) {
     return x.toFixed(0);
