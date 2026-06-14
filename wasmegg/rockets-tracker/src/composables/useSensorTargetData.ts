@@ -16,12 +16,8 @@ import Type = ei.ArtifactSpec.Type;
 const UNTARGETED = 10000;
 
 // Sort key and type lookups — maps any item afx_id (including fragments) to its family's data
-const afxIdToSortKey = new Map<Name, number>(
-  allPossibleTiers.map(t => [t.afx_id, t.family.sort_key])
-);
-const afxIdToType = new Map<Name, Type>(
-  allPossibleTiers.map(t => [t.afx_id, t.family.afx_type])
-);
+const afxIdToSortKey = new Map<Name, number>(allPossibleTiers.map(t => [t.afx_id, t.family.sort_key]));
+const afxIdToType = new Map<Name, Type>(allPossibleTiers.map(t => [t.afx_id, t.family.afx_type]));
 
 // Group order: artifacts first, then stones, then ingredients
 const TYPE_GROUP_ORDER: Record<number, number> = {
@@ -58,7 +54,6 @@ export interface BucketWithTargets extends Bucket {
   targets: BucketTargetData[];
   totalSlots: number;
 }
-
 
 // --- Granularity / bucketing ---
 
@@ -122,7 +117,20 @@ function bucketKeyForDay(day: string, gran: Granularity): string {
 }
 
 const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const MONTH_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_FULL = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
 
 function bucketLabel(key: string, gran: Granularity, showYear: boolean): string {
   if (gran === 'day' || gran === '3day' || gran === 'week' || gran === '2week') {
@@ -187,16 +195,10 @@ function formatDayForRange(day: string): string {
 
 // --- The composable ---
 
-export function useSensorTargetData(
-  artifactsDB: Ref<ei.IArtifactsDB>,
-  options?: { maxColumns?: Ref<number>; dragAxis?: 'horizontal' | 'vertical' | 'auto' },
-) {
+export function useSensorTargetData(artifactsDB: Ref<ei.IArtifactsDB>, options?: { maxColumns?: Ref<number> }) {
   const maxColumns = options?.maxColumns ?? ref(DEFAULT_MAX_COLUMNS);
-  const dragAxis = options?.dragAxis ?? 'auto';
 
-  const missions = computed(() =>
-    getLaunchedMissions(artifactsDB.value).map(m => new Mission(m))
-  );
+  const missions = computed(() => getLaunchedMissions(artifactsDB.value).map(m => new Mission(m)));
 
   // Aggregate mission data at daily granularity
   const fullData = computed(() => {
@@ -246,15 +248,11 @@ export function useSensorTargetData(
   const clampedEnd = computed(() => Math.min(endIdx.value, allDays.value.length));
   const clampedStart = computed(() => Math.max(0, Math.min(startIdx.value, clampedEnd.value - MIN_VISIBLE_DAYS)));
 
-  const visibleDays = computed(() =>
-    allDays.value.slice(clampedStart.value, clampedEnd.value)
-  );
+  const visibleDays = computed(() => allDays.value.slice(clampedStart.value, clampedEnd.value));
 
   // --- Adaptive bucketing ---
 
-  const granularity = computed<Granularity>(() =>
-    granularityForSpan(visibleDays.value.length, maxColumns.value)
-  );
+  const granularity = computed<Granularity>(() => granularityForSpan(visibleDays.value.length, maxColumns.value));
 
   const buckets = computed<Bucket[]>(() => {
     const gran = granularity.value;
@@ -270,7 +268,10 @@ export function useSensorTargetData(
         raw.push({ key, days: [day] });
       }
     }
-    const yearFlags = markYearLabels(raw.map(b => b.key), gran);
+    const yearFlags = markYearLabels(
+      raw.map(b => b.key),
+      gran
+    );
     return raw.map((b, i) => ({
       key: b.key,
       label: bucketLabel(b.key, gran, yearFlags[i]),
@@ -372,13 +373,10 @@ export function useSensorTargetData(
   const getCursorFraction = (e: WheelEvent, el: HTMLElement | null): number => {
     if (!el) return 0.5;
     const rect = el.getBoundingClientRect();
-    if (dragAxis === 'vertical') {
-      return Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
-    }
-    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    return Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
   };
 
-  const onWheel = (e: WheelEvent, cardEl: HTMLElement | null) => {
+  const onWheel = (e: WheelEvent, trackEl: HTMLElement | null) => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
 
@@ -390,7 +388,7 @@ export function useSensorTargetData(
     if (!frameRequested) syncLiveFromState();
 
     const span = liveEnd - liveStart;
-    const cursorFraction = getCursorFraction(e, cardEl);
+    const cursorFraction = getCursorFraction(e, trackEl);
 
     // Multiplicative zoom keeps every wheel tick feeling proportional
     // regardless of current zoom level. Trackpad pinch arrives as ctrl+wheel
@@ -403,8 +401,14 @@ export function useSensorTargetData(
     let newStart = anchor - cursorFraction * newSpan;
     let newEnd = newStart + newSpan;
 
-    if (newStart < 0) { newEnd -= newStart; newStart = 0; }
-    if (newEnd > total) { newStart -= newEnd - total; newEnd = total; }
+    if (newStart < 0) {
+      newEnd -= newStart;
+      newStart = 0;
+    }
+    if (newEnd > total) {
+      newStart -= newEnd - total;
+      newEnd = total;
+    }
     liveStart = Math.max(0, newStart);
     liveEnd = Math.min(total, newEnd);
     scheduleFrame();
@@ -413,7 +417,6 @@ export function useSensorTargetData(
   // --- Drag-to-pan ---
 
   const isDragging = ref(false);
-  let dragStartX = 0;
   let dragStartY = 0;
   let dragStartDayIdx = 0;
   let dragSpan = 0;
@@ -422,28 +425,22 @@ export function useSensorTargetData(
     const span = clampedEnd.value - clampedStart.value;
     if (span >= allDays.value.length) return;
     isDragging.value = true;
-    dragStartX = e.clientX;
     dragStartY = e.clientY;
     dragStartDayIdx = clampedStart.value;
     dragSpan = span;
     syncLiveFromState();
   };
 
-  const onDragMove = (e: MouseEvent, containerEl: HTMLElement | null) => {
-    if (!isDragging.value || !containerEl) return;
+  const onDragMove = (e: MouseEvent, trackEl: HTMLElement | null) => {
+    if (!isDragging.value || !trackEl) return;
     const total = allDays.value.length;
 
-    const w = containerEl.clientWidth;
-    const h = containerEl.clientHeight;
-    const isVertical = dragAxis === 'vertical' || (dragAxis === 'auto' && h > w);
-
-    const pixelDelta = isVertical ? e.clientY - dragStartY : e.clientX - dragStartX;
-    const axisSize = isVertical ? h : w;
-    if (axisSize <= 0) return;
+    const h = trackEl.clientHeight;
+    if (h <= 0) return;
 
     // Fractional day delta — rounding happens only at frame flush, so panning
     // tracks the pointer continuously instead of jumping a whole day at a time.
-    const dayDelta = (-pixelDelta / axisSize) * dragSpan;
+    const dayDelta = (-(e.clientY - dragStartY) / h) * dragSpan;
     const newStart = Math.max(0, Math.min(dragStartDayIdx + dayDelta, total - dragSpan));
     liveStart = newStart;
     liveEnd = newStart + dragSpan;

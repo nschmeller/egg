@@ -43,8 +43,8 @@
 
   <collapsible-section
     section-title="Sensor target history"
-    :visible="isVisibleSection('mission-charts')"
-    @toggle="toggleSectionVisibility('mission-charts')"
+    :visible="isVisibleSection('sensor-target-history')"
+    @toggle="toggleSectionVisibility('sensor-target-history')"
   >
     <sensor-target-history :artifacts-d-b="artifactsDB" />
   </collapsible-section>

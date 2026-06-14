@@ -1,8 +1,6 @@
 <template>
-  <div ref="cardRef" class="mx-4 xl:mx-0" @wheel="handleWheel">
-    <div v-if="allDays.length === 0" class="text-center text-xs text-gray-500">
-      No sensor target data available.
-    </div>
+  <div class="mx-4 xl:mx-0" @wheel="handleWheel">
+    <div v-if="allDays.length === 0" class="text-center text-xs text-gray-500">No sensor target data available.</div>
     <template v-else>
       <div class="text-center text-sm font-medium text-gray-900 mb-1 tabular-nums">
         {{ rangeLabel }}
@@ -20,10 +18,7 @@
       <div
         ref="containerRef"
         class="relative overflow-hidden select-none"
-        :class="[
-          { 'cursor-grab': !isDragging, 'cursor-grabbing': isDragging },
-          { 'sth-animate': !isDragging },
-        ]"
+        :class="[{ 'cursor-grab': !isDragging, 'cursor-grabbing': isDragging }, { 'sth-animate': !isDragging }]"
         :style="{ height: chartHeight + 'px' }"
         @mousedown="handleDragStart"
         @mousemove="handleDragMove"
@@ -47,7 +42,7 @@
               v-tippy="{ content: `${seg.name}: ${formatSlots(seg.slots)} slots` }"
               class="sth-seg h-full flex items-center justify-start pl-0.5 overflow-hidden"
               :style="{
-                width: (bucket.totalSlots > 0 ? seg.slots / bucket.totalSlots * 100 : 0) + '%',
+                width: (bucket.totalSlots > 0 ? (seg.slots / bucket.totalSlots) * 100 : 0) + '%',
                 backgroundColor: SEGMENT_COLORS[seg.colorIdx % SEGMENT_COLORS.length],
               }"
             >
@@ -86,10 +81,22 @@ const ROW_GAP_PX = 3;
 
 // Distinct pastels so artifact icons stand out against the background.
 const SEGMENT_COLORS = [
-  '#bfdbfe', '#fecaca', '#bbf7d0', '#fde68a',
-  '#ddd6fe', '#fbcfe8', '#a5f3fc', '#fed7aa',
-  '#c7d2fe', '#d9f99d', '#fecdd3', '#99f6e4',
-  '#e9d5ff', '#fef08a', '#e2e8f0', '#d6d3d1',
+  '#bfdbfe',
+  '#fecaca',
+  '#bbf7d0',
+  '#fde68a',
+  '#ddd6fe',
+  '#fbcfe8',
+  '#a5f3fc',
+  '#fed7aa',
+  '#c7d2fe',
+  '#d9f99d',
+  '#fecdd3',
+  '#99f6e4',
+  '#e9d5ff',
+  '#fef08a',
+  '#e2e8f0',
+  '#d6d3d1',
 ];
 
 export default defineComponent({
@@ -101,7 +108,6 @@ export default defineComponent({
   },
   setup(props) {
     const { artifactsDB } = toRefs(props);
-    const cardRef = ref<HTMLElement | null>(null);
     const containerRef = ref<HTMLElement | null>(null);
     const maxColumns = ref(Math.max(3, Math.floor(CHART_HEIGHT_PX / APPROX_ROW_HEIGHT_PX)));
 
@@ -117,11 +123,13 @@ export default defineComponent({
       onDragStart,
       onDragMove,
       onDragEnd,
-    } = useSensorTargetData(artifactsDB, { maxColumns, dragAxis: 'vertical' });
+    } = useSensorTargetData(artifactsDB, { maxColumns });
 
     const isZoomed = computed(() => rangeLabel.value !== 'Showing all time');
 
-    const handleWheel = (e: WheelEvent) => onWheel(e, cardRef.value);
+    // Anchor zoom against the track (containerRef), not the outer card, so the
+    // row under the cursor stays put — the card includes the title/hint header.
+    const handleWheel = (e: WheelEvent) => onWheel(e, containerRef.value);
 
     // Distinguish click from drag: track whether mouse moved during interaction
     let dragMoved = false;
@@ -168,7 +176,6 @@ export default defineComponent({
     };
 
     return {
-      cardRef,
       containerRef,
       chartHeight: CHART_HEIGHT_PX,
       allDays,
@@ -198,7 +205,9 @@ export default defineComponent({
  * drag-to-pan tracks the pointer 1:1 with no lag.
  */
 .sth-animate .sth-row {
-  transition: top 160ms cubic-bezier(0.4, 0, 0.2, 1), height 160ms cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    top 160ms cubic-bezier(0.4, 0, 0.2, 1),
+    height 160ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 .sth-animate .sth-seg {
   transition: width 160ms cubic-bezier(0.4, 0, 0.2, 1);
