@@ -12,55 +12,8 @@ import Type = ei.ArtifactSpec.Type;
 
 // --- Artifact metadata ---
 
-// Colors sampled from T4 artifact icons
-const ARTIFACT_COLORS: Partial<Record<Name, string>> = {
-  [Name.PUZZLE_CUBE]:          '#c8882e',
-  [Name.LUNAR_TOTEM]:          '#8e8e96',
-  [Name.DEMETERS_NECKLACE]:    '#d4a630',
-  [Name.VIAL_MARTIAN_DUST]:    '#c05a30',
-  [Name.AURELIAN_BROOCH]:      '#a0cce8',
-  [Name.TUNGSTEN_ANKH]:        '#3a5080',
-  [Name.ORNATE_GUSSET]:        '#8b5e2a',
-  [Name.NEODYMIUM_MEDALLION]:  '#d0a020',
-  [Name.MERCURYS_LENS]:        '#d08820',
-  [Name.BEAK_OF_MIDAS]:        '#d4920a',
-  [Name.CARVED_RAINSTICK]:     '#8a7058',
-  [Name.INTERSTELLAR_COMPASS]: '#b88020',
-  [Name.THE_CHALICE]:          '#c88018',
-  [Name.PHOENIX_FEATHER]:      '#e07018',
-  [Name.QUANTUM_METRONOME]:    '#c8b830',
-  [Name.DILITHIUM_MONOCLE]:    '#6870a0',
-  [Name.TITANIUM_ACTUATOR]:    '#7888a0',
-  [Name.SHIP_IN_A_BOTTLE]:     '#484848',
-  [Name.TACHYON_DEFLECTOR]:    '#c8c020',
-  [Name.BOOK_OF_BASAN]:        '#b07828',
-  [Name.LIGHT_OF_EGGENDIL]:    '#e8c830',
-  [Name.GOLD_METEORITE]:       '#c8a040',
-  [Name.TAU_CETI_GEODE]:       '#d0a018',
-  [Name.SOLAR_TITANIUM]:       '#8090b0',
-  [Name.LUNAR_STONE]:              '#2e1848',
-  [Name.SHELL_STONE]:              '#d8d0b8',
-  [Name.TACHYON_STONE]:            '#30c878',
-  [Name.TERRA_STONE]:              '#907048',
-  [Name.SOUL_STONE]:               '#a060d0',
-  [Name.DILITHIUM_STONE]:          '#c860e0',
-  [Name.QUANTUM_STONE]:            '#d8d828',
-  [Name.LIFE_STONE]:               '#b0b8c8',
-  [Name.CLARITY_STONE]:            '#b89020',
-  [Name.PROPHECY_STONE]:           '#e8b818',
-  [Name.CLARITY_STONE_FRAGMENT]:   '#b89020',
-  [Name.DILITHIUM_STONE_FRAGMENT]: '#c860e0',
-  [Name.LIFE_STONE_FRAGMENT]:      '#b0b8c8',
-  [Name.LUNAR_STONE_FRAGMENT]:     '#2e1848',
-  [Name.PROPHECY_STONE_FRAGMENT]:  '#e8b818',
-  [Name.QUANTUM_STONE_FRAGMENT]:   '#d8d828',
-  [Name.SHELL_STONE_FRAGMENT]:     '#d8d0b8',
-  [Name.SOUL_STONE_FRAGMENT]:      '#a060d0',
-  [Name.TACHYON_STONE_FRAGMENT]:   '#30c878',
-  [Name.TERRA_STONE_FRAGMENT]:     '#907048',
-};
-
-const FALLBACK_COLOR = '#64748b';
+// Sentinel targetArtifact value the game uses for "no specific target".
+const UNTARGETED = 10000;
 
 // Sort key and type lookups — maps any item afx_id (including fragments) to its family's data
 const afxIdToSortKey = new Map<Name, number>(
@@ -98,14 +51,12 @@ export interface BucketTargetData {
   id: Name;
   name: string;
   icon: string;
-  color: string;
   slots: number;
 }
 
 export interface BucketWithTargets extends Bucket {
   targets: BucketTargetData[];
   totalSlots: number;
-  maxSlots: number;
 }
 
 
@@ -253,7 +204,7 @@ export function useSensorTargetData(
     const totals = new Map<Name, number>();
     for (const mission of missions.value) {
       const id = mission.missionInfo.targetArtifact;
-      if (id == null || id === Name.UNKNOWN || Number(id) === 10000) continue;
+      if (id == null || id === Name.UNKNOWN || Number(id) === UNTARGETED) continue;
       totals.set(id, (totals.get(id) || 0) + (mission.capacity ?? 0));
       if (!mission.launchTime) continue;
       const dayKey = mission.launchTime.format('YYYY-MM-DD');
@@ -344,14 +295,12 @@ export function useSensorTargetData(
           id,
           name: getTargetName(id),
           icon: getImageUrlFromId(id, 64),
-          color: ARTIFACT_COLORS[id] ?? FALLBACK_COLOR,
           slots,
         }))
         .sort((a, b) => b.slots - a.slots);
 
       const totalSlots = targets.reduce((s, t) => s + t.slots, 0);
-      const maxSlots = targets.length > 0 ? targets[0].slots : 0;
-      return { ...bucket, targets, totalSlots, maxSlots };
+      return { ...bucket, targets, totalSlots };
     });
   });
 
@@ -365,26 +314,46 @@ export function useSensorTargetData(
   });
 
   // --- Zoom controls ---
+  //
+  // For buttery interactions we keep a non-reactive "live" view window
+  // (`liveStart`/`liveEnd`, in fractional day indices) that gesture handlers
+  // mutate at the native event rate, and flush it into the reactive refs at
+  // most once per animation frame. This decouples input frequency (wheel/mouse
+  // events can fire many times per frame) from Vue's re-bucketing work, so the
+  // chart never re-layouts more than once per painted frame.
 
-  // Lock the card height on first zoom so it doesn't shift under the cursor.
-  let lockedHeight: number | null = null;
+  let liveStart = 0;
+  let liveEnd = 0;
+  let frameRequested = false;
 
-  const lockCardHeight = (el: HTMLElement | null) => {
-    if (!el) return;
-    if (lockedHeight === null) lockedHeight = el.offsetHeight;
-    el.style.minHeight = lockedHeight + 'px';
+  const flushFrame = () => {
+    frameRequested = false;
+    const total = allDays.value.length;
+    const start = Math.max(0, Math.min(Math.round(liveStart), total - MIN_VISIBLE_DAYS));
+    startIdx.value = Math.max(0, start);
+    endIdx.value = Math.min(total, Math.round(liveEnd));
   };
 
-  const unlockCardHeight = (el: HTMLElement | null) => {
-    if (!el) return;
-    el.style.minHeight = '';
-    lockedHeight = null;
+  const scheduleFrame = () => {
+    if (frameRequested || typeof requestAnimationFrame === 'undefined') {
+      if (typeof requestAnimationFrame === 'undefined') flushFrame();
+      return;
+    }
+    frameRequested = true;
+    requestAnimationFrame(flushFrame);
   };
 
-  const resetZoom = (cardEl?: HTMLElement | null) => {
+  // Pull the live window from the committed reactive state. Called at the start
+  // of a gesture so we continue from wherever discrete actions (click/reset)
+  // last left the view.
+  const syncLiveFromState = () => {
+    liveStart = clampedStart.value;
+    liveEnd = clampedEnd.value;
+  };
+
+  const resetZoom = () => {
     startIdx.value = 0;
     endIdx.value = allDays.value.length;
-    if (cardEl) unlockCardHeight(cardEl);
   };
 
   const zoomToBucket = (bucket: Bucket) => {
@@ -412,31 +381,33 @@ export function useSensorTargetData(
   const onWheel = (e: WheelEvent, cardEl: HTMLElement | null) => {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
-    lockCardHeight(cardEl);
 
     const total = allDays.value.length;
     if (total <= MIN_VISIBLE_DAYS) return;
 
-    const currentStart = clampedStart.value;
-    const currentEnd = clampedEnd.value;
-    const span = currentEnd - currentStart;
+    // Start from committed state unless a frame is already mid-flight, so
+    // consecutive wheel ticks within one frame compound smoothly.
+    if (!frameRequested) syncLiveFromState();
 
+    const span = liveEnd - liveStart;
     const cursorFraction = getCursorFraction(e, cardEl);
-    const step = Math.max(1, Math.round(span * 0.15));
-    const zoomDelta = e.deltaY > 0 ? step : -step;
-    const newSpan = Math.max(MIN_VISIBLE_DAYS, Math.min(total, span + zoomDelta));
-    const spanChange = newSpan - span;
 
-    const leftChange = Math.round(spanChange * cursorFraction);
-    const rightChange = spanChange - leftChange;
+    // Multiplicative zoom keeps every wheel tick feeling proportional
+    // regardless of current zoom level. Trackpad pinch arrives as ctrl+wheel
+    // with larger deltas, which this naturally accommodates.
+    const factor = Math.exp(e.deltaY * 0.0025);
+    const newSpan = Math.max(MIN_VISIBLE_DAYS, Math.min(total, span * factor));
 
-    let newStart = currentStart - leftChange;
-    let newEnd = currentEnd + rightChange;
+    // Anchor the day under the cursor so it stays put as we zoom.
+    const anchor = liveStart + cursorFraction * span;
+    let newStart = anchor - cursorFraction * newSpan;
+    let newEnd = newStart + newSpan;
 
     if (newStart < 0) { newEnd -= newStart; newStart = 0; }
-    if (newEnd > total) { newStart -= (newEnd - total); newEnd = total; }
-    startIdx.value = Math.max(0, newStart);
-    endIdx.value = newEnd;
+    if (newEnd > total) { newStart -= newEnd - total; newEnd = total; }
+    liveStart = Math.max(0, newStart);
+    liveEnd = Math.min(total, newEnd);
+    scheduleFrame();
   };
 
   // --- Drag-to-pan ---
@@ -445,6 +416,7 @@ export function useSensorTargetData(
   let dragStartX = 0;
   let dragStartY = 0;
   let dragStartDayIdx = 0;
+  let dragSpan = 0;
 
   const onDragStart = (e: MouseEvent) => {
     const span = clampedEnd.value - clampedStart.value;
@@ -453,12 +425,13 @@ export function useSensorTargetData(
     dragStartX = e.clientX;
     dragStartY = e.clientY;
     dragStartDayIdx = clampedStart.value;
+    dragSpan = span;
+    syncLiveFromState();
   };
 
   const onDragMove = (e: MouseEvent, containerEl: HTMLElement | null) => {
     if (!isDragging.value || !containerEl) return;
     const total = allDays.value.length;
-    const span = clampedEnd.value - clampedStart.value;
 
     const w = containerEl.clientWidth;
     const h = containerEl.clientHeight;
@@ -468,10 +441,13 @@ export function useSensorTargetData(
     const axisSize = isVertical ? h : w;
     if (axisSize <= 0) return;
 
-    const dayDelta = Math.round((-pixelDelta / axisSize) * span);
-    const newStart = Math.max(0, Math.min(dragStartDayIdx + dayDelta, total - span));
-    startIdx.value = newStart;
-    endIdx.value = newStart + span;
+    // Fractional day delta — rounding happens only at frame flush, so panning
+    // tracks the pointer continuously instead of jumping a whole day at a time.
+    const dayDelta = (-pixelDelta / axisSize) * dragSpan;
+    const newStart = Math.max(0, Math.min(dragStartDayIdx + dayDelta, total - dragSpan));
+    liveStart = newStart;
+    liveEnd = newStart + dragSpan;
+    scheduleFrame();
   };
 
   const onDragEnd = () => {
