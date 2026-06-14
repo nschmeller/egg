@@ -1,5 +1,5 @@
 <template>
-  <div class="mx-4 xl:mx-0" @wheel="handleWheel">
+  <div class="mx-4 xl:mx-0">
     <div v-if="allDays.length === 0" class="text-center text-xs text-gray-500">No sensor target data available.</div>
     <template v-else>
       <div class="text-center text-sm font-medium text-gray-900 mb-1 tabular-nums">
@@ -20,6 +20,7 @@
         class="relative overflow-hidden select-none"
         :class="[{ 'cursor-grab': !isDragging, 'cursor-grabbing': isDragging }, { 'sth-animate': !isDragging }]"
         :style="{ height: chartHeight + 'px' }"
+        @wheel="handleWheel"
         @mousedown="handleDragStart"
         @mousemove="handleDragMove"
         @mouseup="onDragEnd"

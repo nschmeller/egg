@@ -60,6 +60,10 @@ export interface BucketWithTargets extends Bucket {
 const MIN_VISIBLE_DAYS = 7;
 const DEFAULT_MAX_COLUMNS = 20;
 
+// Wheel/pinch zoom strength: span multiplies by exp(deltaY * ZOOM_SENSITIVITY)
+// per event, so zoom feels proportional at any level. Higher = more sensitive.
+const ZOOM_SENSITIVITY = 0.004;
+
 const GRANULARITIES: { gran: Granularity; approxDays: number }[] = [
   { gran: 'day', approxDays: 1 },
   { gran: '3day', approxDays: 3 },
@@ -393,7 +397,7 @@ export function useSensorTargetData(artifactsDB: Ref<ei.IArtifactsDB>, options?:
     // Multiplicative zoom keeps every wheel tick feeling proportional
     // regardless of current zoom level. Trackpad pinch arrives as ctrl+wheel
     // with larger deltas, which this naturally accommodates.
-    const factor = Math.exp(e.deltaY * 0.0025);
+    const factor = Math.exp(e.deltaY * ZOOM_SENSITIVITY);
     const newSpan = Math.max(MIN_VISIBLE_DAYS, Math.min(total, span * factor));
 
     // Anchor the day under the cursor so it stays put as we zoom.
